@@ -1,0 +1,77 @@
+NUME: IUGA FLORIN-EUGEN
+GRUPA SI SERIA: 325CA
+AN:2019
+
+
+						TEMA 2 PC
+					  <------------>
+
+server.cpp:
+<---------->
+
+	In server se primesc mesajele de la clientii UDP care sunt parsate
+	si trimise clientilor TCP, abonati la topicurile transmise prin mesajele
+	de la clientii UDP. Pentru a usura transmiterea mesajelor clientilor TCP
+	m-am folosit de niste structuri ajutatoare: Topic, UDPMessage, TCPMessage,
+	respectiv ClientTCP.
+	Astfel, structura UDPMessage o folosesc pentru transmiterea mesajului legat
+	de un anumit topic tuturor clientilor TCP abonati.
+
+	Logica de implementare:
+
+	-> am deschis 2 socketi, unul pentru TCP si unul pentru UDP
+	-> stabilesc conexiunile intre server si clientii
+	-> programul ruleaza intr-un while(true)
+	-> am vectorul de biti read_fds care retin socketii pe care server-ul primeste
+	   mesajele: pentru STDIN, pentru clientii TCP, respectiv clientii UDP.
+	-> apoi, server-ul verifica pe ce tip de socket a primit cerere: daca a primit cerere pe un socket TCP
+	   inseamna ca a venit o cerere de conexiune pe socket-ul inactiv (cel cu listen) pe care serverul
+	   o accepta. Astfel, un nou client TCP se conecteaza la server. Clientii TCP sunt retinuti intr-un
+	   array de clientiTCP. Cand un nou client TCP se conecteaza la server, se verifica daca exista deja un client cu
+	   ID-ul respectiv(prin intermediul caruia s-a conectat). Daca da, atunci doar se updateaza socket-ul cu noul socket,
+	   intrucat acest lucru inseamna ca a mai fost conectat in trecut respectivul client TCP. Se trimit toate mesajele
+	   pentru topicele la care clientul a avut activat SF-ul si la care era abonat. Daca nu gaseste respectivul ID, rezulta
+	   ca este un client TCP nou, astfel ca este adaugat in array-ul de clienti TCP.
+	   Daca server-ul a primit cerere pe clientul UDP, inseamna ca s-a primit un mesaj de tip UDPMessage. Se parseaza
+	   bufferul in care s-a facut receive, in functie de tipul de date (0, 1, 2, 3) si se populeaza structura. Apoi,
+	   se trimite respectivul mesaj (adica structura UDPMessage) tuturor clientilor abonati la acel topic, in caz ca
+	   sunt conectati. Daca nu sunt conectati (isOffline == true) se verifica daca clientul avea activat flag-ul SF.
+	   Daca da, atunci mesajul este salvat in array-ul sfMessages din structura ClientTCP pentru a putea fi trimise
+	   in momentul in care se conecteaza iar clientul. Daca a primit ceva de la STDIN, inseamna ca s-a primit mesajul
+	   "exit"; pun in campul type din UDPMessage valoarea 4 (am facut o conventie astfel ca type = 4 => exit pentru
+	   toti clientii TCP). Se trimite mesajul de exit tuturor clientilor TCP conectati.
+	   Daca s-a primit date pe unul dintre socketii de client, inseamna ca sunt mesaje de tipul TCPMessage, adica
+	   "subscribe topic SF" sau "unsubscribe topic". Daca este "subscribe", se verifica daca a mai fost abonat
+	   in trecut clientul la topicul respectiv, daca da, atunci se updateaza campul "isStillSubscribed" la true,
+	   daca nu, se adauga topicul in lista de topice la care s-a abonat clientul (subscribedMessages). Daca mesajul
+	   primit este de tip "unsubscribe", se updateaza "isStillSubscribed" al respectivului topic din lista de topice
+	   a clientului la false.
+	   Daca rezultatul intors de functia recv() este 0, inseamna ca acel client a inchis conexiunea si se scoate
+	   socket-ul inchis din vectorul de socketi.
+
+
+subscriber.cpp:
+<------------->
+
+	   -> contine aceleasi structuri ca server-ul, __attribute__((packed)) este pentru alinierea corecta a datelor
+	   -> se stabilesc conexiunile cu server-ul
+	   -> intr-un while(true):
+	   	  Se verifica daca a primit ceva de la stdin. Daca da, se verifica daca mesajul
+	   	  este de tip "exit", caz in care se opreste conexiunea cu serverul. Altfel,
+	   	  inseamna ca a fost un mesaj de tip "subscribe" sau "unsubscribe". Se populeaza
+	   	  structura TCPMessage in functie de caz si este trimis server-ului.
+	   	  Daca a primit ceva de la server (adica un mesaj de tip UDPMessage):
+	   	  - se verifica in functie de tipul de date primit (type) si se afiseaza mesajul in formatul dorit
+	   	  - daca daca type == 4, conform conventiei inseamna ca a primit un mesaj de "exit" de la server
+	   	  si se inchide conexiunea.
+
+Observatii:
+<---------->
+
+			-> pentru compilare si rulare: make server, make subscriberTcp.
+			Apoi se ruleaza manual server-ul (de ex. ./server 8888), se ruleaza clientul UDP (cu python etc.),
+			se ruleaza clientii TCP (de ex. ./subscriber clientID1 IP port).
+			Apoi se dau mesaje in clientii TCP (de ex: subscribe a_negative_int 1, iar in clientul UDP se introduce de la tastatura 1 => toti
+			clientii TCP abonati la a_negative_int vor primi mesajul). Server-ul si conexiunile se inchid prin comanda "exit". 
+
+
